@@ -46,6 +46,7 @@ app.use(express.json());
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Your API endpoint
+// src/server.ts
 app.post('/api/business-details', async (req: Request, res: Response) => {
     const { name, address, postalCode } = req.body;
 
@@ -54,15 +55,20 @@ app.post('/api/business-details', async (req: Request, res: Response) => {
     }
 
     if (!GOOGLE_PLACES_API_KEY) {
-        console.error("GOOGLE_PLACES_API_KEY is not set. Please set it in your .env file.");
+        console.error("GOOGLE_PLACES_API_KEY is not set");
         return res.status(500).json({ error: "Server configuration error: Google API Key missing." });
     }
 
     try {
-        const details = await getBusinessDetailsFromPlaces(name, address, postalCode, GOOGLE_PLACES_API_KEY);
+        const details = await getBusinessDetailsFromPlaces(
+            name,
+            address,
+            postalCode,
+            GOOGLE_PLACES_API_KEY
+        );
 
         if (details) {
-            res.json(details);
+            res.json(details);  // The response will now have the new field names
         } else {
             res.status(404).json({ error: "Business details not found for the provided information." });
         }

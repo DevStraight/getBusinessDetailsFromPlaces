@@ -1,8 +1,27 @@
+openapi: 3.0.0
+info:
+  title: Google Business Details API
+  version: 1.0.0
+  description: API to retrieve Google Places business details based on name, address, and postal code.
+  contact:
+    name: Your Name/Company
+    url: http://yourwebsite.com
+    email: contact@yourwebsite.com
+
+servers:
+  - url: http://localhost:3000
+    description: Local development server
+  - url: http://192.168.0.51:3000
+    description: Local development server (LAN accessible)
+
 paths:
   /api/business-details:
     post:
+      tags:
+        - Business Details
       summary: Retrieve Google Places business details.
-      description: Fetches detailed information for a business from Google Places API using its name, address, and postal code.
+      description: Fetches detailed business information using name, address and postal code.
+      operationId: getBusinessDetails
       requestBody:
         required: true
         content:
@@ -11,87 +30,141 @@ paths:
               $ref: '#/components/schemas/BusinessInput'
       responses:
         '200':
-          description: Successfully retrieved business details.
+          description: Successfully retrieved business details
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/BusinessDetailsResponse'
+              example:
+                nom: "Musée du Louvre"
+                adresse: "Rue de Rivoli, 75001 Paris, France"
+                phone: "+33 1 40 20 53 17"
+                website: "http://www.louvre.fr/"
+                openingHours:
+                  - "lundi: 09:00-18:00"
+                  - "mardi: Fermé"
+                  - "mercredi: 09:00-18:00"
+                  - "jeudi: 09:00-18:00"
+                  - "vendredi: 09:00-21:45"
+                  - "samedi: 09:00-18:00"
+                  - "dimanche: 09:00-18:00"
+                rating: 4.7
+                reviewCount: 268953
+                googleMapsUrl: "https://maps.google.com/?cid=17565349581333481267"
+                placeId: "ChIJb1G_y31y5kcRWwD9d_Hl75s"
+                geolocalisation:
+                  lat: 48.860611
+                  lon: 2.337644
         '400':
-          description: Bad request - Missing parameters.
+          description: Bad request - Missing or invalid parameters
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Missing required parameters: name, address, or postalCode."
         '404':
-          description: Business not found for the provided information.
+          description: Business not found
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Business details not found for the provided information."
         '500':
-          description: Internal server error or API key missing.
+          description: Internal server error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Internal server error occurred while processing your request."
 
 components:
   schemas:
     BusinessInput:
       type: object
-      required: ['name', 'address', 'postalCode']
+      required:
+        - name
+        - address
+        - postalCode
       properties:
         name:
           type: string
-          description: 'The name of the business.'
-          example: 'Musée du Louvre'
+          description: The name of the business
+          example: "Musée du Louvre"
         address:
           type: string
-          description: 'The street address of the business.'
-          example: 'Rue de Rivoli'
+          description: The street address of the business
+          example: "Rue de Rivoli"
         postalCode:
           type: string
-          description: 'The postal code of the business.'
-          example: '75001'
+          description: The postal code of the business
+          example: "75001"
+      example:
+        name: "Musée du Louvre"
+        address: "Rue de Rivoli"
+        postalCode: "75001"
+
     BusinessDetailsResponse:
       type: object
       properties:
-        name: { type: 'string' }
-        address: { type: 'string' }
-        phone: { type: 'string' }
-        website: { type: 'string' }
-        openingHours: { type: 'array', items: { type: 'string' } }
-        rating: { type: 'number', format: 'float' }
-        reviewCount: { type: 'integer' }
-        googleMapsUrl: { type: 'string', format: 'url' }
-        placeId: { type: 'string' }
-        latitude: { type: 'number', format: 'float' }
-        longitude: { type: 'number', format: 'float' }
-      example:
-        "name": "Musée du Louvre"
-        "address": "Rue de Rivoli, 75001 Paris, France"
-        "phone": "+33 1 40 20 53 17"
-        "website": "http://www.louvre.fr/"
-        "openingHours": [
-          "lundi: 09:00-18:00",
-          "mardi: Fermé",
-          "mercredi: 09:00-18:00",
-          "jeudi: 09:00-18:00",
-          "vendredi: 09:00-21:45",
-          "samedi: 09:00-18:00",
-          "dimanche: 09:00-18:00"
-        ]
-        "rating": 4.7
-        "reviewCount": 268953
-        "googleMapsUrl": "https://maps.google.com/?cid=17565349581333481267"
-        "placeId": "ChIJb1G_y31y5kcRWwD9d_Hl75s"
-        "latitude": 48.860611
-        "longitude": 2.337644
+        nom:
+          type: string
+          description: The name of the business
+        adresse:
+          type: string
+          description: The full address of the business
+        phone:
+          type: string
+          description: International phone number
+        website:
+          type: string
+          description: Business website URL
+        openingHours:
+          type: array
+          items:
+            type: string
+          description: Opening hours by weekday
+        rating:
+          type: number
+          format: float
+          description: Average rating (0-5)
+        reviewCount:
+          type: integer
+          description: Total number of reviews
+        googleMapsUrl:
+          type: string
+          format: url
+          description: Direct URL to Google Maps
+        placeId:
+          type: string
+          description: Google Places ID
+        geolocalisation:
+          type: object
+          properties:
+            lat:
+              type: number
+              format: float
+              description: Latitude coordinate
+            lon:
+              type: number
+              format: float
+              description: Longitude coordinate
+          description: Geographic coordinates of the business
+
     ErrorResponse:
       type: object
       properties:
         error:
           type: string
-          description: 'A message describing the error.'
-      example:
-        error: 'Missing required parameters: name, address, or postalCode.'
+          description: Error message
+      required:
+        - error
+
+securitySchemes:
+  apiKey:
+    type: apiKey
+    in: header
+    name: X-API-KEY
+    description: Google Places API key
