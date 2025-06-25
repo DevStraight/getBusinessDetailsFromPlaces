@@ -1,5 +1,4 @@
 // src/index.ts
-// Corrected import paths for @googlemaps/google-maps-services-js
 import { Client, PlaceInputType, PlaceDetailsResponseData } from "@googlemaps/google-maps-services-js";
 
 interface BusinessDetails {
@@ -12,9 +11,9 @@ interface BusinessDetails {
     reviewCount?: number;
     googleMapsUrl?: string;
     placeId?: string;
-    latitude?: number; // Added latitude for better type definition
-    longitude?: number; // Added longitude for better type definition
-    [key: string]: any; // Allows for additional dynamic properties
+    latitude?: number;
+    longitude?: number;
+    [key: string]: any;
 }
 
 /**
@@ -25,22 +24,22 @@ interface BusinessDetails {
  * @param apiKey Votre clé API Google Places.
  * @returns Un objet contenant les détails de l'entreprise ou null si non trouvée/erreur.
  */
-export async function getBusinessDetailsFromPlaces( // Export the function
+export async function getBusinessDetailsFromPlaces(
     businessName: string,
     address: string,
     postalCode: string,
-    apiKey: string
+    apiKey: string,
 ): Promise<BusinessDetails | null> {
     const query = `${businessName}, ${address}, ${postalCode}`;
     const client = new Client({});
 
     try {
         console.log(`Recherche du lieu pour: "${query}"`);
+
         const findPlaceResponse = await client.findPlaceFromText({
             params: {
                 input: query,
-                // Fixed: Use the enum member for inputtype
-                inputtype: PlaceInputType.textQuery, // Corrected casing
+                inputtype: PlaceInputType.textQuery,
                 fields: ["place_id", "name", "formatted_address"],
                 key: apiKey,
             },
@@ -75,7 +74,7 @@ export async function getBusinessDetailsFromPlaces( // Export the function
                     "rating",
                     "user_ratings_total",
                     "url",
-                    "geometry", // Includes location (lat/lng)
+                    "geometry",
                 ],
                 key: apiKey,
             },
@@ -98,9 +97,6 @@ export async function getBusinessDetailsFromPlaces( // Export the function
                 latitude: result.geometry?.location.lat,
                 longitude: result.geometry?.location.lng,
             };
-            // Remove console.log if this function is meant to return data to an API handler
-            // console.log("Détails de l'entreprise récupérés avec succès:");
-            // console.log(JSON.stringify(businessDetails, null, 2));
             return businessDetails;
         } else {
             console.log(`Aucun détail trouvé pour le Place ID: ${placeId}`);
@@ -113,19 +109,14 @@ export async function getBusinessDetailsFromPlaces( // Export the function
     }
 }
 
-// --- IMPORTANT: This part is for standalone testing or example. ---
-// In a real server setup, you'd typically remove this block
-// and use the `export` keyword on `getBusinessDetailsFromPlaces`
-// to import it into your server file (e.g., `server.ts`).
-
-const MY_API_KEY = process.env.GOOGLE_PLACES_API_KEY || "AIzaSyC28N7_Pu362xZPH6vEYmJru8QzXMokxSw"; // Replace this placeholder!
+// --- Simulations d'une requête API (pour tester sans serveur réel) ---
+const MY_API_KEY = process.env.GOOGLE_PLACES_API_KEY || "VOTRE_CLE_API_GOOGLE_PLACES";
 
 if (MY_API_KEY === "VOTRE_CLE_API_GOOGLE_PLACES") {
     console.warn("ATTENTION: Votre clé API Google Places est un placeholder. Veuillez la remplacer par votre vraie clé API ou la définir via une variable d'environnement 'GOOGLE_PLACES_API_KEY'.");
 }
 
 // Example of a function that simulates receiving an API request.
-// In a real server (Express.js, NestJS, etc.), this would be an HTTP endpoint.
 async function simulateApiRequest(data: { name: string; address: string; postalCode: string }): Promise<BusinessDetails | { error: string }> {
     if (!MY_API_KEY || MY_API_KEY === "VOTRE_CLE_API_GOOGLE_PLACES") {
         return { error: "Clé API Google Places manquante ou non valide." };
@@ -157,7 +148,6 @@ const requestPayload = {
     postalCode: "75001"
 };
 
-// Only run the simulation if index.ts is executed directly (not imported as a module)
 if (require.main === module) {
     console.log(`\nSimulating API request for: ${requestPayload.name}, ${requestPayload.address}, ${requestPayload.postalCode}`);
     simulateApiRequest(requestPayload)
