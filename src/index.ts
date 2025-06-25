@@ -1,6 +1,6 @@
 // src/index.ts
-import { Client } from "@googlemaps/google-maps-services-js";
-import { PlaceDetailsResponseData } from "@googlemaps/google-maps-services-js/dist/places";
+// Corrected import paths for @googlemaps/google-maps-services-js
+import { Client, PlaceInputType, PlaceDetailsResponseData } from "@googlemaps/google-maps-services-js";
 
 interface BusinessDetails {
     name: string;
@@ -12,10 +12,20 @@ interface BusinessDetails {
     reviewCount?: number;
     googleMapsUrl?: string;
     placeId?: string;
-    [key: string]: any;
+    latitude?: number; // Added latitude for better type definition
+    longitude?: number; // Added longitude for better type definition
+    [key: string]: any; // Allows for additional dynamic properties
 }
 
-async function getBusinessDetailsFromPlaces(
+/**
+ * Récupère les détails d'une entreprise via l'API Google Places.
+ * @param businessName Le nom de l'entreprise.
+ * @param address L'adresse de l'entreprise.
+ * @param postalCode Le code postal de l'entreprise.
+ * @param apiKey Votre clé API Google Places.
+ * @returns Un objet contenant les détails de l'entreprise ou null si non trouvée/erreur.
+ */
+export async function getBusinessDetailsFromPlaces( // Export the function
     businessName: string,
     address: string,
     postalCode: string,
@@ -29,7 +39,8 @@ async function getBusinessDetailsFromPlaces(
         const findPlaceResponse = await client.findPlaceFromText({
             params: {
                 input: query,
-                inputtype: "textquery",
+                // Fixed: Use the enum member for inputtype
+                inputtype: PlaceInputType.textQuery, // Corrected casing
                 fields: ["place_id", "name", "formatted_address"],
                 key: apiKey,
             },
@@ -50,6 +61,7 @@ async function getBusinessDetailsFromPlaces(
         }
         console.log(`Place ID trouvé: ${placeId}`);
 
+        // --- Étape 2: Utiliser le Place ID pour obtenir les détails complets du lieu ---
         console.log(`Récupération des détails pour le Place ID: ${placeId}`);
         const placeDetailsResponse = await client.placeDetails({
             params: {
@@ -63,6 +75,7 @@ async function getBusinessDetailsFromPlaces(
                     "rating",
                     "user_ratings_total",
                     "url",
+                    "geometry", // Includes location (lat/lng)
                 ],
                 key: apiKey,
             },
@@ -82,9 +95,12 @@ async function getBusinessDetailsFromPlaces(
                 reviewCount: result.user_ratings_total,
                 googleMapsUrl: result.url,
                 placeId: placeId,
+                latitude: result.geometry?.location.lat,
+                longitude: result.geometry?.location.lng,
             };
-            console.log("Détails de l'entreprise récupérés avec succès:");
-            console.log(JSON.stringify(businessDetails, null, 2));
+            // Remove console.log if this function is meant to return data to an API handler
+            // console.log("Détails de l'entreprise récupérés avec succès:");
+            // console.log(JSON.stringify(businessDetails, null, 2));
             return businessDetails;
         } else {
             console.log(`Aucun détail trouvé pour le Place ID: ${placeId}`);
@@ -97,26 +113,59 @@ async function getBusinessDetailsFromPlaces(
     }
 }
 
-const MY_API_KEY = ""; 
+// --- IMPORTANT: This part is for standalone testing or example. ---
+// In a real server setup, you'd typically remove this block
+// and use the `export` keyword on `getBusinessDetailsFromPlaces`
+// to import it into your server file (e.g., `server.ts`).
 
-async function runExample() {
-    const businessName = "Maison de la Radio";
-    const businessAddress = "Avenue du Président Kennedy";
-    const businessPostalCode = "75016";
+const MY_API_KEY = process.env.GOOGLE_PLACES_API_KEY || "AIzaSyC28N7_Pu362xZPH6vEYmJru8QzXMokxSw"; // Replace this placeholder!
 
-    const details = await getBusinessDetailsFromPlaces(
-        businessName,
-        businessAddress,
-        businessPostalCode,
-        MY_API_KEY
-    );
+if (MY_API_KEY === "VOTRE_CLE_API_GOOGLE_PLACES") {
+    console.warn("ATTENTION: Votre clé API Google Places est un placeholder. Veuillez la remplacer par votre vraie clé API ou la définir via une variable d'environnement 'GOOGLE_PLACES_API_KEY'.");
+}
 
-    if (details) {
-        console.log("\n--- Résultat Final ---");
-        console.log(JSON.stringify(details, null, 2));
-    } else {
-        console.log("\n--- Impossible de récupérer les détails pour l'entreprise spécifiée. ---");
+// Example of a function that simulates receiving an API request.
+// In a real server (Express.js, NestJS, etc.), this would be an HTTP endpoint.
+async function simulateApiRequest(data: { name: string; address: string; postalCode: string }): Promise<BusinessDetails | { error: string }> {
+    if (!MY_API_KEY || MY_API_KEY === "VOTRE_CLE_API_GOOGLE_PLACES") {
+        return { error: "Clé API Google Places manquante ou non valide." };
+    }
+
+    try {
+        const details = await getBusinessDetailsFromPlaces(
+            data.name,
+            data.address,
+            data.postalCode,
+            MY_API_KEY
+        );
+
+        if (details) {
+            return details;
+        } else {
+            return { error: "Impossible de trouver les détails pour l'entreprise spécifiée." };
+        }
+    } catch (error) {
+        console.error("Erreur dans la simulation de requête API:", error);
+        return { error: "Une erreur interne est survenue lors du traitement de la requête." };
     }
 }
 
-runExample();
+// --- Example of using the simulation ---
+const requestPayload = {
+    name: "Musée du Louvre",
+    address: "Rue de Rivoli",
+    postalCode: "75001"
+};
+
+// Only run the simulation if index.ts is executed directly (not imported as a module)
+if (require.main === module) {
+    console.log(`\nSimulating API request for: ${requestPayload.name}, ${requestPayload.address}, ${requestPayload.postalCode}`);
+    simulateApiRequest(requestPayload)
+        .then(response => {
+            console.log("\n--- Réponse Simulant l'API ---");
+            console.log(JSON.stringify(response, null, 2));
+        })
+        .catch(err => {
+            console.error("Erreur lors de la simulation de la requête:", err);
+        });
+}
