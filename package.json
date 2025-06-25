@@ -1,0 +1,29 @@
+{
+  "name": "getbusinessdetailsfromplaces",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/VictorBaumgartner/getBusinessDetailsFromPlaces.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/VictorBaumgartner/getBusinessDetailsFromPlaces/issues"
+  },
+  "homepage": "https://github.com/VictorBaumgartner/getBusinessDetailsFromPlaces#readme",
+  "devDependencies": {
+    "@types/node": "^24.0.4",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@googlemaps/google-maps-services-js": "^3.4.1",
+    "axios": "^1.10.0"
+  }
+}
