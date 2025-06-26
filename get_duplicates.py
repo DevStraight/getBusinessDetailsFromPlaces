@@ -3,7 +3,7 @@ import re
 from collections import Counter
 import os
 
-def remove_frequent_words_from_csv(
+def retrieve_only_frequent_words_to_csv(
     input_csv_path,
     output_csv_path,
     duplicate_threshold=3,
@@ -13,14 +13,14 @@ def remove_frequent_words_from_csv(
 ):
     """
     Reads a CSV file, identifies words that appear 'duplicate_threshold' or more times
-    across the entire file, and then removes those words from each line when
-    writing to a new CSV file.
+    across the entire file, and then *keeps only* those words in each line when
+    writing to a new CSV file. All other words are removed.
 
     Args:
         input_csv_path (str): The path to the input CSV file.
         output_csv_path (str): The path for the new output CSV file.
-        duplicate_threshold (int): Words appearing this many times or more will be removed.
-                                   (e.g., 3 means words with 3, 4, 5... occurrences are removed).
+        duplicate_threshold (int): Words appearing this many times or more will be KEPT.
+                                   (e.g., 3 means words with 3, 4, 5... occurrences are kept).
         case_sensitive (bool): If True, "Word" and "word" are counted as different.
                                If False, they are counted as the same.
         delimiter (str): The delimiter used in your CSV file (e.g., ',', ';', '\t').
@@ -61,26 +61,30 @@ def remove_frequent_words_from_csv(
 
     if not frequent_words:
         print(f"No words found with {duplicate_threshold} or more occurrences. "
-              f"Copying '{input_csv_path}' to '{output_csv_path}' without changes.")
-        # If no words meet the criteria, just copy the file
+              f"The output CSV will be created, but all fields will be empty.")
+        # Create an empty CSV with just the original structure but no content,
+        # or just create an empty file if that's preferred.
         try:
-            os.makedirs(os.path.dirname(output_csv_path), exist_ok=True)
-            with open(input_csv_path, 'r', encoding='utf-8') as src, \
-                 open(output_csv_path, 'w', encoding='utf-8') as dest:
-                dest.write(src.read())
-            print("Done.")
+            with open(output_csv_path, 'w', newline='', encoding='utf-8') as outfile:
+                writer = csv.writer(outfile, delimiter=delimiter, quotechar=quotechar)
+                # Optionally write header if input has one (simple header assumption)
+                if lines_content and len(lines_content) > 0:
+                     writer.writerow([''] * len(lines_content[0])) # Write empty row matching column count
+                # If you prefer a completely empty file:
+                # pass
+            print(f"Empty or header-only CSV created at '{output_csv_path}'.")
         except Exception as e:
-            print(f"Error copying file: {e}")
+            print(f"Error creating output file with no frequent words: {e}")
         return
 
-    print(f"Identified {len(frequent_words)} words to remove (appearing {duplicate_threshold} or more times):")
+    print(f"Identified {len(frequent_words)} words to KEEP (appearing {duplicate_threshold} or more times):")
     # For large lists, you might want to skip printing all of them
     # print(sorted(list(frequent_words))[:20], "..." if len(frequent_words) > 20 else "")
+
 
     # --- Pass 2: Write modified content to the new CSV file ---
     print(f"Pass 2: Writing processed data to '{output_csv_path}'...")
     try:
-        os.makedirs(os.path.dirname(output_csv_path), exist_ok=True) # Ensure output directory exists
         with open(output_csv_path, 'w', newline='', encoding='utf-8') as outfile:
             writer = csv.writer(outfile, delimiter=delimiter, quotechar=quotechar)
 
@@ -93,7 +97,8 @@ def remove_frequent_words_from_csv(
                     filtered_words = []
                     for word in words_in_field:
                         word_to_check = word.lower() if not case_sensitive else word
-                        if word_to_check not in frequent_words:
+                        # THIS IS THE KEY CHANGE: Keep IF IN frequent_words
+                        if word_to_check in frequent_words:
                             filtered_words.append(word) # Keep original case for the output
                     
                     new_row.append(' '.join(filtered_words))
@@ -102,17 +107,17 @@ def remove_frequent_words_from_csv(
         print(f"Successfully processed and saved to '{output_csv_path}'.")
 
     except Exception as e:
-        print(f"An error occurred during Pass 2: {e}")
+        print(f"An unexpected error occurred during Pass 2: {e}")
 
+# --- How to use the function (Example) ---
 if __name__ == "__main__":
     # Define your input and output file names
-    input_file = "noms.csv"
-    output_file = "noms_cleaned.csv"
+    input_file = "noms.csv" # Your input file
+    output_file = "duplicates.csv" # Your desired output file name
 
-    # Call the function to remove words with 3 or more duplicates
-    # Case-insensitive example: "apple", "Apple" will be counted as the same.
-    print("\n--- Running with Case-Insensitive Mode ---")
-    remove_frequent_words_from_csv(
+    # Call the function to retrieve only words with 3 or more duplicates
+    print("\n--- Running to retrieve ONLY frequent words (Case-Insensitive Mode) ---")
+    retrieve_only_frequent_words_to_csv(
         input_csv_path=input_file,
         output_csv_path=output_file,
         duplicate_threshold=3,
