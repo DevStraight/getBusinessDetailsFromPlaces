@@ -1,4 +1,3 @@
-// src/index.ts
 import { Client, PlaceInputType } from "@googlemaps/google-maps-services-js";
 
 interface BusinessDetails {
@@ -15,68 +14,66 @@ interface BusinessDetails {
         lat: number;
         lon: number;
     };
+    [key: string]: any;
 }
 
-// Enhanced validation functions
-function validateName(inputName: string, apiName: string): boolean {
-    const normalize = (str: string) => {
-        return str.toLowerCase()
-            .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-            .replace(/[^a-z0-9 ]/g, '')
-            .replace(/\b(le|la|les|un|une|des|du|de|l'|the|a|an)\b/g, '')
-            .trim();
-    };
+/**
+ * Normalizes text for comparison (removes accents, punctuation, and converts to lowercase)
+ */
+function normalizeText(text: string): string {
+    return text
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove accents
+        .replace(/[^a-zA-Z0-9\s]/g, '') // Remove punctuation
+        .toLowerCase()
+        .trim();
+}
 
-    const normalizedInput = normalize(inputName);
-    const normalizedApi = normalize(apiName);
+/**
+ * Checks if the found name matches the search name (flexible matching)
+ */
+function isNameMatch(searchName: string, foundName: string): boolean {
+    const normalizedSearch = normalizeText(searchName);
+    const normalizedFound = normalizeText(foundName);
     
-    // Check for significant word matches
-    const inputWords = normalizedInput.split(' ').filter(w => w.length > 2);
-    const apiWords = normalizedApi.split(' ').filter(w => w.length > 2);
+    // Split into keywords
+    const searchKeywords = normalizedSearch.split(/\s+/);
+    const foundKeywords = normalizedFound.split(/\s+/);
     
-    const matchingWords = inputWords.filter(word => 
-        apiWords.includes(word)
+    // Count matching keywords (at least half must match)
+    const matchingKeywords = searchKeywords.filter(searchKeyword => 
+        foundKeywords.some(foundKeyword => 
+            foundKeyword.includes(searchKeyword) || searchKeyword.includes(foundKeyword)
+        )
     ).length;
-
-    return matchingWords >= Math.min(2, Math.max(inputWords.length, apiWords.length) * 0.5);
+    
+    return matchingKeywords >= Math.max(1, searchKeywords.length / 2);
 }
 
-function validateAddress(inputAddress: string, apiAddress: string, postalCode: string): boolean {
-    const normalize = (str: string) => {
-        return str.toLowerCase()
-            .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-            .replace(/[^a-z0-9, ]/g, '')
-            .replace(/\s+/g, ' ')
-            .trim();
-    };
-
-    const normalizedInput = normalize(inputAddress);
-    const normalizedApi = normalize(apiAddress);
+/**
+ * Checks if the found address matches the search address and postal code
+ */
+function isAddressMatch(searchAddress: string, searchPostalCode: string, foundAddress: string): boolean {
+    const normalizedSearchAddr = normalizeText(searchAddress);
+    const normalizedFoundAddr = normalizeText(foundAddress);
     
-    // Validate postal code presence
-    const postalCodePattern = new RegExp(`\\b${postalCode}\\b`);
-    if (!postalCodePattern.test(normalizedInput) && !postalCodePattern.test(normalizedApi)) {
-        return false;
-    }
-
-    // Check for street number match
-    const inputNumberMatch = normalizedInput.match(/\d+/);
-    const apiNumberMatch = normalizedApi.match(/\d+/);
-    if (inputNumberMatch && apiNumberMatch && inputNumberMatch[0] !== apiNumberMatch[0]) {
-        return false;
-    }
-
-    // Check for significant address components
-    const inputComponents = normalizedInput.split(/[, ]+/).filter(c => c.length > 3);
-    const apiComponents = normalizedApi.split(/[, ]+/).filter(c => c.length > 3);
+    // Extract postal code from found address
+    const postalCodeRegex = /(\b\d{5}\b)/; // Match 5-digit postal code
+    const foundPostalCodeMatch = foundAddress.match(postalCodeRegex);
+    const foundPostalCode = foundPostalCodeMatch ? foundPostalCodeMatch[0] : '';
     
-    const matchingComponents = inputComponents.filter(comp => 
-        apiComponents.includes(comp)
-    ).length;
-
-    return matchingComponents >= Math.min(2, Math.max(inputComponents.length, apiComponents.length) * 0.5);
+    // Check if address contains search terms or vice versa
+    const addressContainsSearch = normalizedFoundAddr.includes(normalizedSearchAddr) || 
+                                normalizedSearchAddr.includes(normalizedFoundAddr);
+    
+    // Check if postal code matches (if we have one in the search)
+    const postalCodesMatch = !searchPostalCode || foundPostalCode === searchPostalCode;
+    
+    return addressContainsSearch && postalCodesMatch;
 }
 
+/**
+ * Retrieves business details from Google Places API with flexible matching
+ */
 export async function getBusinessDetailsFromPlaces(
     businessName: string,
     address: string,
@@ -86,8 +83,10 @@ export async function getBusinessDetailsFromPlaces(
     const client = new Client({});
 
     try {
-        // First try with full query
-        const query = `${businessName}, ${address}, ${postalCode}`;
+        // First try: Search with all details
+        let query = `${businessName}, ${address}, ${postalCode}`;
+        console.log(`Searching for place: "${query}"`);
+
         const findPlaceResponse = await client.findPlaceFromText({
             params: {
                 input: query,
@@ -98,58 +97,96 @@ export async function getBusinessDetailsFromPlaces(
             timeout: 10000,
         });
 
-        if (!findPlaceResponse.data.candidates?.length) {
+        // If no results, try with just name and postal code
+        let candidates = findPlaceResponse.data.candidates;
+        if (!candidates || candidates.length === 0) {
+            query = `${businessName}, ${postalCode}`;
+            console.log(`Trying alternative search: "${query}"`);
+            
+            const altResponse = await client.findPlaceFromText({
+                params: {
+                    input: query,
+                    inputtype: PlaceInputType.textQuery,
+                    fields: ["place_id", "name", "formatted_address"],
+                    key: apiKey,
+                },
+                timeout: 10000,
+            });
+            candidates = altResponse.data.candidates;
+        }
+
+        if (!candidates || candidates.length === 0) {
+            console.log(`No place found for query: "${query}"`);
             return null;
         }
 
-        const candidate = findPlaceResponse.data.candidates[0];
-        const placeId = candidate.place_id;
-        if (!placeId) return null;
+        // Check candidates for matches
+        for (const candidate of candidates) {
+            const placeId = candidate.place_id;
+            if (!placeId) continue;
 
-        // Get full details
-        const placeDetailsResponse = await client.placeDetails({
-            params: {
-                place_id: placeId,
-                fields: [
-                    "name", "formatted_address", "international_phone_number",
-                    "website", "opening_hours", "rating", "user_ratings_total",
-                    "url", "geometry"
-                ],
-                key: apiKey,
-            },
-            timeout: 10000,
-        });
+            const candidateName = candidate.name || '';
+            const candidateAddress = candidate.formatted_address || '';
+            
+            // Check matches with flexible criteria
+            const nameMatches = isNameMatch(businessName, candidateName);
+            const addressMatches = isAddressMatch(address, postalCode, candidateAddress);
+            
+            if (!nameMatches && !addressMatches) {
+                console.log(`Skipping candidate - no match:`);
+                console.log(`  Search: "${businessName}" vs Found: "${candidateName}"`);
+                console.log(`  Search: "${address}, ${postalCode}" vs Found: "${candidateAddress}"`);
+                continue;
+            }
 
-        const result = placeDetailsResponse.data.result;
-        if (!result) return null;
+            console.log(`Found potential match, getting details for place ID: ${placeId}`);
+            const placeDetailsResponse = await client.placeDetails({
+                params: {
+                    place_id: placeId,
+                    fields: [
+                        "name", "formatted_address", "international_phone_number",
+                        "website", "opening_hours", "rating", "user_ratings_total",
+                        "url", "geometry"
+                    ],
+                    key: apiKey,
+                },
+                timeout: 10000,
+            });
 
-        // Validate either name OR address matches
-        const isNameValid = validateName(businessName, result.name || '');
-        const isAddressValid = validateAddress(address, result.formatted_address || '', postalCode);
+            const result = placeDetailsResponse.data.result;
+            if (!result) continue;
 
-        if (!isNameValid && !isAddressValid) {
-            console.log(`Validation failed for ${businessName} - Name/address mismatch`);
-            return null;
+            // Final verification with detailed info
+            const finalName = result.name || '';
+            const finalAddress = result.formatted_address || '';
+            
+            const finalNameMatch = isNameMatch(businessName, finalName);
+            const finalAddressMatch = isAddressMatch(address, postalCode, finalAddress);
+            
+            if (finalNameMatch || finalAddressMatch) {
+                return {
+                    nom: finalName,
+                    adresse: finalAddress,
+                    phone: result.international_phone_number,
+                    website: result.website,
+                    openingHours: result.opening_hours?.weekday_text,
+                    rating: result.rating,
+                    reviewCount: result.user_ratings_total,
+                    googleMapsUrl: result.url,
+                    placeId: placeId,
+                    geolocalisation: result.geometry?.location ? {
+                        lat: result.geometry.location.lat,
+                        lon: result.geometry.location.lng
+                    } : undefined
+                };
+            }
         }
 
-        return {
-            nom: result.name || businessName,
-            adresse: result.formatted_address || address,
-            phone: result.international_phone_number,
-            website: result.website,
-            openingHours: result.opening_hours?.weekday_text,
-            rating: result.rating,
-            reviewCount: result.user_ratings_total,
-            googleMapsUrl: result.url,
-            placeId: placeId,
-            geolocalisation: result.geometry?.location ? {
-                lat: result.geometry.location.lat,
-                lon: result.geometry.location.lng
-            } : undefined
-        };
+        console.log(`No valid matches found after checking all candidates`);
+        return null;
 
     } catch (error: any) {
-        console.error("API Error:", error.response?.data || error.message);
+        console.error("Error fetching business details:", error.response?.data || error.message);
         return null;
     }
 }
