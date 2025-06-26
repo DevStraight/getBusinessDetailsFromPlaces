@@ -25,6 +25,7 @@
     "axios": "^1.10.0",
     "dotenv": "^16.5.0",
     "express": "^4.21.2",
+    "levenshtein-edit-distance": "^3.0.1",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1"
   }
