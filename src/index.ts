@@ -44,6 +44,183 @@ async function initializeLLM() {
     return llmMatcher;
 }
 
+// Global state for dynamic filters - now pre-populated from the provided CSV
+let _commonNamesInitialized = false;
+let _genericNameWords: Set<string>; // Declare it, but initialize in the function
+
+
+/**
+ * Initializes dynamic common name filters using the pre-provided list.
+ * This function ensures the generic name words are loaded only once.
+ */
+async function initializeCommonNameFilters() {
+    if (_commonNamesInitialized) {
+        return;
+    }
+
+    console.log("Initializing common name filters from provided list...");
+    // These words are directly from the user-provided 'unique_frequent_words.csv' content.
+    const commonWordsList = [
+        "abbaye", "abeille", "abeilles", "abers", "acacias", "adam", "agneaux", "agricole", "air",
+        "alain", "albert", "alexandre", "allain", "alphonse", "alpines", "amap", "amblard", "amiens",
+        "andre", "andré", "anges", "angoulême", "angus", "anjou", "anne", "annie", "anthony", "antoine",
+        "apicole", "apiculteur", "apiculture", "ar", "arbogast", "arc", "armement", "artisanale",
+        "asinerie", "asperges", "assiette", "association", "atelier", "ateliers", "atrapolou",
+        "auberge", "aubry", "auguste", "augustin", "authieux", "autruches", "avenue", "avicole",
+        "baconnes", "bagnol", "baguiers", "baie", "balade", "bar", "baraques", "bardot", "bas",
+        "basque", "basse", "bastide", "bateau", "baume", "bayard", "bayle", "beau", "beauce",
+        "beaumont", "beaurains", "beauregard", "bec", "bel", "belair", "belette", "belle",
+        "bellefontaine", "bellevue", "benjamin", "benoit", "benoît", "berger", "bergerie",
+        "bergers", "bernard", "bernardins", "bernay", "berry", "bert", "bertin", "bertrand",
+        "besançon", "bien", "biere", "bio", "bis", "bisons", "blaise", "blanc", "blanchard",
+        "blanche", "blanches", "blancs", "blanquefort", "bleu", "bleue", "bleues", "blé",
+        "bocage", "bodeaux", "boeuf", "bois", "bon", "bonheur", "bonnaud", "bonne", "bonnet",
+        "bons", "bonvalot", "borde", "bordeaux", "borie", "bosc", "bosquet", "bouche",
+        "boucherie", "boulange", "boulevard", "boulognebillancourt", "bourg", "bourgogne",
+        "bourguignon", "bout", "boutet", "boutique", "bouverie", "brasserie", "bray",
+        "brebis", "breuil", "brie", "brigand", "brionnais", "brive", "brossard", "brosses",
+        "brouette", "brousse", "brun", "bruno", "bruyère", "bruyères", "buis", "buisson",
+        "bulles", "burgaud", "buron", "bégude", "cabane", "cabanon", "cabra", "cabras",
+        "cabrettes", "cabri", "cabriolait", "cabrioles", "cabris", "caen", "café", "cagouille",
+        "cailles", "caillet", "cal", "camargue", "camin", "camp", "campagne", "camping", "campus",
+        "canard", "canards", "cap", "caprice", "caprices", "carcassonne", "caro", "caroire",
+        "carré", "casse", "caussanel", "cavalerie", "cavaroque", "cave", "caveau", "caves", "caviar",
+        "cellier", "centre", "cerfs", "cest", "cevennes", "chalets", "chambon", "chambord",
+        "chambres", "champ", "champagne", "champarts", "champenois", "champenoise", "champi",
+        "champignons", "champion", "champs", "chandres", "chant", "chante", "chanteloup", "chapelle",
+        "charcuterie", "charentaise", "charles", "charlotte", "charme", "charmes", "chateau",
+        "chatenet", "chaudron", "chauffour", "chaumes", "chemin", "chemins", "chevalier",
+        "chevrerie", "chevres", "chevriers", "chez", "christelle", "christian", "christine",
+        "christophe", "chrétienne", "château", "châteaux", "chèvre", "chèvrerie", "chèvres",
+        "chêne", "chênes", "cidre", "cidrerie", "cie", "ciel", "cinq", "ciron", "citron", "cité",
+        "claire", "clairette", "claude", "clef", "clos", "clède", "clé", "clément", "coat",
+        "coccinelle", "cochon", "cochons", "cocotte", "cocottes", "coeur", "cognac", "coiffy",
+        "coin", "colline", "collines", "colombier", "combe", "combes", "commanderie", "compagnie",
+        "compans", "comptoir", "comte", "confitures", "conserves", "coopérative", "coquelicots",
+        "coquillages", "corbie", "corinne", "cote", "coteaux", "coudriers", "coujan", "cour",
+        "courbet", "cours", "couëdic", "cressonnieres", "creux", "crigne", "crinières", "croix",
+        "croquez", "cros", "crozon", "cru", "crus", "cueillette", "cultures", "cuy", "cèdres",
+        "cécile", "cédric", "céline", "cévennes", "côte", "côteaux", "côté", "dabeilles", "dalex",
+        "dalice", "dalsace", "dame", "damien", "damour", "dangélique", "daniel", "danjou", "danne",
+        "danserville", "dantan", "dantonin", "dapt", "daquitaine", "dargonne", "darmes", "daubrac",
+        "dauphins", "dauphiné", "daurore", "dauré", "dautan", "dauvergne", "david", "deau", "dedith",
+        "deffends", "delaunay", "delices", "delmotte", "delphine", "demilie", "demoiselles", "denis",
+        "deole", "desclans", "deux", "devant", "devoluy", "diamant", "dici", "didier", "dijon",
+        "dimbermais", "direct", "distillerie", "dit", "doche", "docteville", "dom", "domaine",
+        "domaines", "dominique", "dor", "dorchamps", "dore", "doriane", "dormant", "douceurs",
+        "drive", "dubois", "duc", "ducy", "dumesnil", "durand", "dà", "délice", "délices", "earl",
+        "eaux", "ecole", "eddy", "edouard", "elevage", "eleveurs", "elodie", "emilie", "emmanuel",
+        "enclos", "entre", "epi", "eric", "escales", "escargot", "escargots", "espace", "esplanade",
+        "essarts", "est", "ets", "eurl", "ex", "exploitation", "fabien", "fabienne", "fage",
+        "famille", "farges", "farine", "felix", "ferme", "fermeauberge", "fermes", "fermette",
+        "fermier", "fermiers", "fermière", "fermières", "ferry", "fiacre", "figues", "fil", "fille",
+        "filles", "fils", "flaguerie", "fleuri", "fleurs", "fleury", "flora", "florale", "florence",
+        "florent", "florival", "flos", "foie", "folies", "font", "fontaine", "fontaines",
+        "fontenelles", "fontenille", "forez", "forges", "forêt", "fourche", "fourchette", "fourmond",
+        "fourneaux", "fournil", "frais", "fraise", "fraiseraie", "fraises", "framboisier", "france",
+        "francine", "francis", "franck", "françois", "fray", "fred", "freres", "frick", "fromagerie",
+        "fromages", "fromagère", "fruit", "fruitière", "fruits", "frères", "frédéric", "fées", "fêtes",
+        "gaec", "gaillard", "galichet", "gallines", "gambas", "garde", "gare", "garenne", "gatinais",
+        "gaulle", "gautier", "gaëtan", "genets", "genevroye", "georges", "gerard", "germain", "giens",
+        "gilles", "girard", "giraud", "glace", "glaces", "godet", "gorvello", "gourmand", "gourmande",
+        "gourmandes", "gourmandises", "gourmands", "gourmet", "gourmets", "goût", "grain", "graine",
+        "graines", "grains", "grand", "grande", "grandes", "grands", "grandvillain", "grange",
+        "granges", "gras", "gratien", "grave", "graves", "grenadine", "grenier", "grezou", "groin",
+        "gros", "groupement", "grémi", "gue", "guillaume", "guionie", "guy", "gué", "gâtinais",
+        "gâtine", "général", "gérard", "gîte", "gîtes", "haie", "halle", "halles", "hameau", "haut",
+        "haute", "hautes", "hauts", "helix", "henri", "henry", "herbe", "herbes", "hervé", "hilaire",
+        "hirondelles", "hivert", "hop", "horticole", "horticulteur", "horticulture", "hotel",
+        "houlette", "hoymille", "hubert", "huile", "huilerie", "huiles", "huîtres", "hélène", "ibis",
+        "ignames", "ile", "impasse", "isabelle", "jacques", "jacquin", "james", "jardin", "jardins",
+        "jas", "jaurès", "jean", "jeanfrancois", "jeanluc", "jeanpaul", "jeanphilippe", "jerome",
+        "jmc", "joffre", "joseph", "josephine", "jouvente", "jules", "julie", "julien", "jumenterie",
+        "jérôme", "karcher", "karine", "kerbellec", "kerlijouan", "labbaye", "labeille", "laborie",
+        "lac", "lacassagne", "lacay", "laclavette", "lacombe", "lacontal", "lacs", "lagneau", "laire",
+        "lairial", "lait", "laiterie", "laluque", "lambroisie", "lamiral", "lan", "lande", "landes",
+        "lapin", "laragnon", "larbre", "laroque", "larroque", "las", "lassiette", "latelier",
+        "lauberge", "launay", "laure", "laurence", "laurent", "lauzière", "laval", "lavandes",
+        "lavandin", "lavergne", "lavoir", "lay", "leau", "lechelle", "lecole", "leglise", "lenclos",
+        "lepinay", "lescargot", "lescargotière", "lespérance", "lessenciel", "lessentiel", "levesque",
+        "lexploitation", "lherbier", "lherm", "lhermitage", "liberté", "libres", "lieu", "lilas",
+        "lile", "lill", "lille", "lilot", "limousin", "limousine", "liouner", "livraison", "local",
+        "locavor", "loges", "logis", "loire", "loiseau", "lomignon", "lomme", "long", "lor", "loriot",
+        "lorme", "lorrain", "lorraine", "lorée", "lou", "louis", "loup", "lours", "luberon", "luc",
+        "lucie", "lucien", "ludovic", "luguen", "lycée", "lyon", "légumes", "léon", "létable",
+        "madame", "madeleine", "magasin", "mail", "maine", "mairie", "maison", "maisons", "manade",
+        "mannei", "manoir", "mané", "maraicher", "maraichère", "marais", "maraîchage", "maraîcher",
+        "maraîchère", "marc", "marcel", "marche", "marché", "mare", "mareuil", "marguerite", "marie",
+        "marin", "marine", "marion", "marius", "marronniers", "marseille", "martin", "martine",
+        "marty", "maréchal", "mas", "masson", "mathias", "mathieu", "mathilde", "matthieu", "maubec",
+        "maurice", "maya", "mayne", "mazet", "maîtres", "meinau", "mer", "merle", "meslay", "mesnil",
+        "metz", "meuhg", "meules", "meurillon", "meuse", "meyer", "michel", "mickael",
+        "microbrasserie", "miel", "miellerie", "miels", "mignon", "mille", "millet", "mimosas",
+        "minervois", "mirabelle", "mirebeau", "mireille", "mohair", "moi", "monde", "mondpa", "monge",
+        "mons", "monsieur", "mont", "montagne", "montagnes", "montigny", "montplaisir", "montreuil",
+        "monts", "montégut", "motte", "moulin", "moulins", "moun", "mouton", "moutons", "moutte",
+        "muriel", "musée", "myrtille", "mélissa", "métairie", "nadine", "nadège", "nanterre", "nantes",
+        "nathalie", "nature", "naturellement", "nessadiou", "neubourg", "neuf", "neuve", "neuvic",
+        "nice", "nicolas", "noblesse", "noir", "noire", "noisette", "noix", "nord", "normand",
+        "normande", "normandes", "normandie", "nortbert", "nouvelle", "oeufs", "oies", "oliveraie",
+        "olivier", "oliviers", "oléicole", "orchidées", "ott", "ouest", "ours", "pages", "paille",
+        "pain", "pains", "palais", "panier", "paniers", "papilles", "paradis", "parc", "paris",
+        "parking", "parvis", "pascal", "pasquier", "passion", "pastorale", "patrick", "paul",
+        "pauline", "pavillon", "pays", "paysan", "paysanne", "paysannes", "paysans", "pech",
+        "pelletier", "pepiniere", "pepinieres", "perrière", "perron", "petit", "petite", "petites",
+        "petits", "peyrouse", "philippe", "pic", "pieds", "pierre", "pigeonneaux", "pigeonnier",
+        "pigeons", "pin", "pinier", "pis", "pisciculture", "place", "plaine", "plaisance", "plaisirs",
+        "plan", "plantes", "plassons", "plateau", "plein", "plessis", "plume", "plumes", "point",
+        "poirier", "pom", "pommeraie", "pommes", "pommier", "pont", "porc", "porcs", "port",
+        "portail", "porte", "portes", "possibles", "potager", "potagers", "potaverger", "poulailler",
+        "poule", "poules", "poulet", "poulettes", "prade", "pradel", "pradines", "prairie",
+        "prairies", "pre", "pres", "presbytère", "presquîle", "pressoir", "prieuré", "prim",
+        "producteur", "producteurs", "produits", "provence", "pruneau", "pré", "prés", "ptit",
+        "ptite", "ptites", "ptits", "puech", "puy", "pyrénées", "pâtes", "père", "pères",
+        "pédagogique", "pépinières", "périgord", "pêche", "pêcheurs", "quatre", "quentin", "querelle",
+        "queyras", "racines", "ramard", "ramon", "ranch", "rayjane", "reims", "reine", "reines",
+        "relais", "renard", "renaud", "renault", "rennes", "rené", "restaurant", "retrait", "revel",
+        "reville", "rey", "rhuys", "richard", "ried", "rieux", "rive", "rivière", "rivières", "robert",
+        "robichon", "robin", "roc", "roche", "rochefort", "rocher", "roches", "roi", "roland",
+        "rolland", "romain", "rond", "rondeau", "roque", "rose", "roses", "rosier", "rossignol",
+        "rouge", "rouges", "roumanille", "rouquette", "rousseau", "roussel", "roussillon", "route",
+        "roux", "roy", "roys", "ruche", "rucher", "ruchers", "rue", "rémy", "république", "sables",
+        "sablons", "sabots", "safran", "saint", "saintdenis", "sainte", "saintemarie",
+        "saintevictoire", "saintjean", "saintmartin", "saintonge", "saintouen", "sainttropez",
+        "saison", "saisons", "salers", "salle", "salles", "sandrine", "sarah", "sarl", "sas",
+        "sauvage", "sauvages", "sauveur", "saveur", "saveurs", "savoie", "savonnerie", "scamandre",
+        "scea", "scev", "schaeffer", "schmitt", "sebastien", "segida", "sel", "selle", "semporte",
+        "sens", "serge", "sergent", "sernin", "serre", "serres", "simon", "simples", "snc", "sncf",
+        "social", "soldanelles", "soleil", "sollier", "sologne", "sonnailles", "sophie", "sorbets",
+        "source", "sources", "spannagel", "spiruline", "stade", "stand", "strasbourg", "stéphane",
+        "sud", "suscinio", "sylvain", "sébastien", "table", "tailhac", "tapiau", "tardieu",
+        "templiers", "temporaire", "temps", "terferme", "terra", "terre", "terrefort", "terres",
+        "terroir", "terroirs", "thierry", "thomas", "tilleuls", "tilloy", "tisanes", "tome", "top",
+        "torfou", "toulouse", "tour", "touraine", "tours", "tradition", "treille", "trois",
+        "tronquoy", "truffe", "truite", "truites", "trénube", "tuilerie", "tuileries", "ty", "tête",
+        "ulysse", "urbain", "urbaine", "vache", "vacherot", "vaches", "val", "valette", "vallespir",
+        "vallon", "vallons", "vallée", "vallées", "valérie", "van", "vanille", "varennes", "varet",
+        "velay", "vent", "vente", "vents", "vercors", "verger", "vergers", "versailles", "vert",
+        "verte", "vertes", "vertessec", "verts", "viala", "viande", "viandes", "vidal", "vie",
+        "vieille", "vieux", "vignal", "vigne", "vigneron", "vignerons", "vignes", "vignoble",
+        "vignobles", "villa", "village", "ville", "villiers", "viltain", "vin", "vincent",
+        "vinicole", "vins", "vire", "virginie", "vivier", "viviers", "voie", "volaille", "volailles",
+        "volcans", "vosges", "yves"
+    ];
+    _genericNameWords = new Set(commonWordsList);
+    console.log(`Pre-populated ${_genericNameWords.size} common name words from the provided list.`);
+    _commonNamesInitialized = true;
+}
+
+/**
+ * Normalizes a string for word extraction (lowercase, remove accents, remove special chars, trim).
+ * @param str The input string.
+ * @returns The normalized string.
+ */
+const normalizeWord = (str: string) =>
+    str?.normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove accents
+        .replace(/[^a-zA-Z0-9\s]/g, '') // Keep only alphanumeric and spaces
+        .toLowerCase()
+        .trim() || '';
+
 /**
  * Determines if a found business is a valid match for the search query using
  * a hybrid approach: stricter keyword matching followed by LLM verification.
@@ -76,16 +253,16 @@ async function isValidMatch(
 
     const normSearchName = normalize(searchName);
     const normFoundName = normalize(foundName);
-    const normSearchAddr = normalize(searchAddress);
+    const normSearchAddr = normalize(searchAddress); 
     const normFoundAddr = normalize(foundAddress);
 
-    // Split into words, filtering out short common words that often lead to false positives.
-    // Added 'the', 'museum', 'l' (for L'something like L'Oréal) as common words for filtering, as they are often translated or generic.
-    const commonNameWordsToFilter = ['du', 'de', 'la', 'le', 'des', 'et', 'a', 'un', 'une', 'the', 'museum', 'l']; 
-    const searchNameWords = normSearchName.split(/\s+/).filter(w => w.length > 2 && !commonNameWordsToFilter.includes(w));
-    const foundNameWords = normFoundName.split(/\s+/).filter(w => w.length > 2 && !commonNameWordsToFilter.includes(w));
+    // Filter words based ONLY on the pre-populated common words
+    const commonNameWordsToFilter = _genericNameWords;
     
-    // For address, filter out generic street types, but also consider the case where Google simplifies addresses.
+    const searchNameWords = normSearchName.split(/\s+/).filter(w => w.length > 2 && !commonNameWordsToFilter.has(w));
+    const foundNameWords = normFoundName.split(/\s+/).filter(w => w.length > 2 && !commonNameWordsToFilter.has(w));
+    
+    // For address, filter out generic street types. These are general and not derived from business names.
     const commonAddressWordsToFilter = ['route', 'rue', 'avenue', 'chemin', 'impasse', 'place', 'bld', 'boulevard', 'st', 'saint', 'street', 'road', 'avenue', 'court', 'lane', 'drive', 'terrace'];
     const searchAddrWords = normSearchAddr.split(/\s+/).filter(w => w.length > 3 && !commonAddressWordsToFilter.includes(w));
     const foundAddrWords = normFoundAddr.split(/\s+/).filter(w => w.length > 3 && !commonAddressWordsToFilter.includes(w));
@@ -94,12 +271,12 @@ async function isValidMatch(
     const nameWordIntersections = searchNameWords.filter(word => foundNameWords.includes(word));
     const nameOverlapRatio = nameWordIntersections.length / Math.max(searchNameWords.length || 1, foundNameWords.length || 1);
     
-    // ADJUSTED: Lower threshold for strong name match (0.5 means 50% overlap of significant words)
-    // This will make "Musée du Louvre" (musee, louvre) vs "Louvre Museum" (louvre, museum) a strong match (1/2 = 0.5)
+    // Adjusted: Lower threshold for strong name match (0.5 means 50% overlap of significant words)
+    // This allows for "Musée du Louvre" vs "Louvre Museum" to be a strong match (1/2 = 0.5)
     const strongNameMatch = nameOverlapRatio >= 0.5;
 
     // Calculate intersection of words for address.
-    const addrWordIntersections = searchAddrWords.filter(word => foundAddrWords.includes(word));
+    const addrWordIntersections = searchAddrWords.filter(word => foundAddrWords.includes(word)); 
     const basicAddrWordOverlap = addrWordIntersections.length > 0 && 
                                  (addrWordIntersections.length / Math.min(searchAddrWords.length || 1, foundAddrWords.length || 1)) >= 0.3;
 
@@ -118,13 +295,15 @@ async function isValidMatch(
 
 
     // 2. Determine initial match strength.
-    // PRIMARY RULE: For well-known landmarks, a strong name match combined with the correct postal code is often sufficient.
+    // PRIMARY RULE: For well-known landmarks or very precise matches, a strong name match combined with the correct postal code is often sufficient.
+    // This now relies on `strongNameMatch` being true *after* filtering common business types from names.
     if (strongNameMatch && foundAddress.includes(searchPostalCode)) {
-        console.log("Info: Strong name match and postal code match. Considering it a valid match (primary rule for landmarks).");
+        console.log("Info: Strong name match and postal code match. Considering it a valid match (primary rule).");
         return true;
     }
 
     // SECONDARY RULE: If the primary rule didn't hit, check for strong name match AND any relevant address hint.
+    // This is useful for businesses where the name isn't *super* unique, but address details help.
     if (strongNameMatch && (basicAddrWordOverlap || addressContainsSearchStreet)) {
         console.log("Info: Strong name match and sufficient address hint. Considering it a valid match (secondary rule).");
         return true;
@@ -143,7 +322,6 @@ Found Business: "${foundName}, ${foundAddress}"
 Answer (YES/NO):`;
                 
                 const llmResult = await llmMatcher(prompt);
-                // The output structure for 'text-classification' might be an array of objects like [{ label: 'LABEL_0', score: 0.99 }]
                 const { label, score } = Array.isArray(llmResult) ? llmResult[0] : llmResult;
                 
                 console.log(`LLM match confidence: ${score} (Label: ${label})`);
@@ -192,6 +370,10 @@ export async function getBusinessDetailsFromPlaces(
     const client = new Client({});
 
     try {
+        // Ensure dynamic filters and LLM are initialized before proceeding with searches
+        await initializeCommonNameFilters(); // This now uses the pre-defined list
+        await initializeLLM(); 
+
         console.log(`Initiating search for: Name: "${businessName}", Address: "${address}", Postal Code: "${postalCode}"`);
 
         // Try multiple search query variations to maximize chances with Google Places API.
